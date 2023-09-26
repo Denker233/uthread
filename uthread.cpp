@@ -105,6 +105,8 @@ static void switchThreads()
 void stub(void *(*start_routine)(void *), void *arg)
 {
 	// TODO
+	start_routine;
+	uthread_exit(0);
 }
 
 int uthread_init(int quantum_usecs)
@@ -117,9 +119,10 @@ int uthread_init(int quantum_usecs)
 int uthread_create(void *(*start_routine)(void *), void *arg)
 {
 	// Create a new thread and add it to the ready queue
-	ucontext_t* ucp  = malloc(sizeof(ucontext_t));
+	TCB *tcb =new TCB();
+	ucontext_t* ucp  = new ucontext_t;
 
-    if(ucp==NULL){
+    if(ucp==nullptr){
         printf("malloc fail for initilize context");
         return -1;
     }
@@ -134,6 +137,7 @@ int uthread_create(void *(*start_routine)(void *), void *arg)
     
 
     makecontext(ucp,start_routine,1,&arg);
+	addToReadyQueue(tcb);
     return 1;
 }
 
