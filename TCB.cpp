@@ -8,7 +8,7 @@ TCB::TCB(int tid,Priority pr, void *(*start_routine)(void *arg), void *arg, Stat
     this->_pr = pr;
     this->_stack = new char[STACK_SIZE];
     this->sp = this->stack + STACK_SIZE;
-    this->pc = stub(start_routine,arg);
+    this->pc = *stub;
     *(tcb->sp) = arg;
     tcb->sp--;
     *(tcb->sp) = start_routine;
