@@ -11,10 +11,11 @@
 #include <sys/time.h>
 #include <iostream>
 #include "uthread.h"
+using namespace std;
 
 extern void stub(void *(*start_routine)(void *), void *arg);
-
 enum State {READY, RUNNING, BLOCK};
+
 
 /*
  * The thread
@@ -80,6 +81,7 @@ public:
 	 */
 	int saveContext();
 
+	ucontext_t getContext();
 	/**
 	 * function that loads the thread's previously saved context
 	 */
