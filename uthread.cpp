@@ -36,10 +36,11 @@ typedef struct join_queue_entry
 TCB* running_thread;
 TCB* threads[MAX_THREAD_NUM]={nullptr};
 int next_thread_index=0;
+ucontext_t* main_thread_context;
 
 int find_next_index(){
 	for(int i = 0; i < MAX_THREAD_NUM;i++){
-		if(threads[i]!=nullptr){
+		if(threads[i]==nullptr){
 			return i;
 		}
 	}
@@ -175,9 +176,29 @@ static void switchThreads()
 {
 	// TODO
 	volatile int flag = 0;
-	ucontext_t r_context = running_thread->getContext();
-	int ret_val = getcontext(&r_context);
-	 cout << "SWITCH: running thread = " << running_thread->getId() << endl;
+	if(running_thread==nullptr){// main thread
+		main_thread_context = new ucontext_t;
+		ucontext_t* r_context = main_thread_context;
+		printf("main thread switching\n");
+
+		int ret_val = getcontext(r_context);
+		if (flag == 1) {
+        	return;
+    	}
+
+		flag = 1;
+	
+		TCB* next_thread =popFromReadyQueue();
+		if(next_thread==running_thread){
+			printf("no other thread to run\n");
+		}
+		running_thread = next_thread;
+		setcontext(r_context);// 
+	}
+	else{
+		ucontext_t* r_context = running_thread->getContext();
+		int ret_val = getcontext(r_context);
+	//  cout << "SWITCH: running thread = " << running_thread->getId() << endl;
 	if (flag == 1) {
         return;
     }
@@ -190,7 +211,10 @@ static void switchThreads()
 		printf("no other thread to run\n");
 	}
     running_thread = next_thread;
-    setcontext(&r_context);// 
+    setcontext(r_context);// 
+	}
+
+	
 
 }
 
@@ -220,11 +244,13 @@ int uthread_create(void *(*start_routine)(void *), void *arg)
 	// Create a new thread and add it to the ready queue
 	next_thread_index = find_next_index();
 	State state = READY;
-	TCB *tcb =new TCB(next_thread_index,start_routine,arg,&state);
+	TCB* tcb =new TCB(next_thread_index,start_routine,arg,state);
 	threads[next_thread_index]=tcb;
-	ucontext_t context = tcb->getContext();
-    makecontext(&(context),(void (*)(void))(stub),2,start_routine,arg);
+	cout<<"thread index"<<next_thread_index<<endl;
+	ucontext_t* context = tcb->getContext();
+    makecontext((context),(void (*)(void))(stub),2,start_routine,arg);
 	addToReadyQueue(tcb);
+	printf("end of thread_create\n");
     return 1;
 }
 
@@ -318,11 +344,17 @@ void* y(void* x)
 
 int main() 
 {
+	int i =1;
 	cout<<"Entrying main thread..."<<endl;
 	uthread_create(x,(void*)1);
+	printf("after first create\n");
 	uthread_create(y,(void*)1);
-	ucontext_t context=threads[0]->getContext();
-	setcontext(&context);
-	cout<<"Threads are cleaned up"<<endl;
+	printf("after second create\n");
+	ucontext_t* context = threads[0]->getContext();
+	setcontext(context);
+	while(1){
+		i++;
+	}
+	
 	return 0;
 }

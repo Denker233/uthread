@@ -4,16 +4,19 @@
 
 TCB::TCB(int tid,void *(*start_routine)(void *arg), void *arg, State state)
 {   
-    ucontext_t this->_context  = new ucontext_t;
+    this->_context = new ucontext_t;
     saveContext();
+
     this->_tid=tid;
     this->_state = state;
-    this->_stack = new char[STACK_SIZE]
-    this->sp = this->stack + STACK_SIZE;
-    this->pc = &stub;
-    context.uc_stack.ss_sp = this->sp;
-    context.uc_stack.ss_size = STACK_SIZE;
-    context.uc_stack.ss_flags = 0;
+
+    this->_stack = new char[STACK_SIZE];
+    this->sp = this->_stack + STACK_SIZE;
+
+    // this->pc = &stub;
+    this->_context->uc_stack.ss_sp = this->sp;
+    this->_context->uc_stack.ss_size = STACK_SIZE;
+    this->_context->uc_stack.ss_flags = 0;
     // *(this->sp) = arg;
     // this->sp--;
     // *(this->sp) = start_routine;
@@ -61,7 +64,7 @@ int TCB::getQuantum() const
 int TCB::saveContext()
 {   
     
-    if(getcontext(&_context)!=0){
+    if(getcontext(this->_context)!=0){
         cout<<"saveContent fail"<<endl;
         return -1;
     }
@@ -70,13 +73,13 @@ int TCB::saveContext()
     }
 }
 
-ucontext_t TCB::getContext(){
+ucontext_t* TCB::getContext(){
     return this->_context;
 }
 
 void TCB::loadContext()
 {
-    if(setcontext(&_context)==-1){
+    if(setcontext(this->_context)==-1){
         cout<<"LoadContext Error"<<endl;
     }
 }

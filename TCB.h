@@ -33,7 +33,7 @@ public:
          * @param arg the thread function argument
 	 * @param state current state for the new thread
 	 */
-	TCB(int tid, Priority pr, void *(*start_routine)(void* arg), void *arg, State state);
+	TCB(int tid, void *(*start_routine)(void* arg), void *arg, State state);
 	
 	/**
 	 * thread d-tor
@@ -81,7 +81,7 @@ public:
 	 */
 	int saveContext();
 
-	ucontext_t getContext();
+	ucontext_t* getContext();
 	/**
 	 * function that loads the thread's previously saved context
 	 */
@@ -93,7 +93,8 @@ private:
 	int _quantum;           // The time interval, as explained in the pdf.
 	State _state;           // The state of the thread
 	char* _stack;           // The thread's stack
-        ucontext_t _context;    // The thread's saved context
+    ucontext_t* _context;    // The thread's saved context
+	char* sp;               //stack pointer
 };
 
 
