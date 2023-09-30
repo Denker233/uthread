@@ -255,7 +255,15 @@ int uthread_init(int quantum_usecs)
 	setitimer(ITIMER_VIRTUAL, &timer, nullptr);
 
 	while (1) {
-		
+		if (running_thread!=nullptr) {
+			if (running_thread->quantum <= 0) {
+				addToReadyQue(running_thread);
+				running_thread = nullptr;
+			}
+		} else {
+			if (ready_queue != nullptr) {
+				running_thread = popFromReadyQueue();
+		}
 	}
 	
 	return -1;
