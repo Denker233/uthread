@@ -22,18 +22,13 @@ TCB::TCB(int tid,void *(*start_routine)(void *arg), void *arg, State state)
     // *(this->sp) = start_routine;
     // this->sp--;
 
-
-    
-
-
-
-
     
 }
 
 TCB::~TCB()
 {
-
+    delete[] _context->uc_stack.ss_sp;
+    delete[] _context->uc_stack.ss_size;
 }
 
 void TCB::setState(State state)
