@@ -240,6 +240,10 @@ int uthread_init(int quantum_usecs)
 	// Initialize any data structures
 	// Setup timer interrupt and handler
 	// Create a thread for the caller (main) thread
+	struct sigaction sa;
+  	struct itimerval timer;
+
+	
 	return -1;
 }
 
