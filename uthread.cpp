@@ -256,14 +256,21 @@ int uthread_init(int quantum_usecs)
 
 	while (1) {
 		if (running_thread!=nullptr) {
-			if (running_thread->quantum <= 0) {
+			if (running_thread->remainingTime <= 0) {
 				addToReadyQue(running_thread);
 				running_thread = nullptr;
 			}
 		} else {
 			if (ready_queue != nullptr) {
-				running_thread = popFromReadyQueue();
+				TCB* next_thread = popFromReadyQueue();
+				running_thread = next_thread;
 		}
+
+		if (running_thread != nullptr) {
+            	cout << "Running Thread " << running_thread->getid() << endl;
+            	running_thread->remainingTime -= quantum_usecs;
+        }
+        usleep(quantum_usecs);
 	}
 	
 	return -1;
