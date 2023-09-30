@@ -2,6 +2,8 @@
 #include "TCB.h"
 #include <cassert>
 #include <deque>
+#include <signal.h>
+#include <sys/time.h>
 
 using namespace std;
 
@@ -241,8 +243,20 @@ int uthread_init(int quantum_usecs)
 	// Setup timer interrupt and handler
 	// Create a thread for the caller (main) thread
 	struct sigaction sa;
-  	struct itimerval timer;
+	sa.sa_handler = &switchThreads;
+	sigaction(SIGVTALRM, &sa, NULL);
 
+	
+  	struct itimerval timer;
+	timer.it_value.tv_sec = 0;
+    	timer.it_value.tv_usec = quantum_usecs;
+    	timer.it_interval.tv_sec = 0;
+    	timer.it_interval.tv_usec = quantum_usecs;
+	setitimer(ITIMER_VIRTUAL, &timer, nullptr);
+
+	while (1) {
+		
+	}
 	
 	return -1;
 }
@@ -256,7 +270,7 @@ int uthread_create(void *(*start_routine)(void *), void *arg)
 	threads[next_thread_index]=tcb;
 	cout<<"thread index"<<next_thread_index<<endl;
 	ucontext_t* context = tcb->getContext();
-    makecontext((context),(void (*)(void))(stub),2,start_routine,arg);
+        makecontext((context),(void (*)(void))(stub),2,start_routine,arg);
 	addToReadyQueue(tcb);
 	printf("end of thread_create\n");
     return 1;
