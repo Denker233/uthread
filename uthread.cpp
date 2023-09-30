@@ -175,43 +175,47 @@ int removeFromReadyQueue(int tid)
 static void switchThreads()
 {
 	// TODO
-	volatile int flag = 0;
+	volatile int main_flag = 0, flag=0;
 	if(running_thread==nullptr){// main thread
 		main_thread_context = new ucontext_t;
 		ucontext_t* r_context = main_thread_context;
 		printf("main thread switching\n");
 
 		int ret_val = getcontext(r_context);
-		if (flag == 1) {
+		if (main_flag == 1) {
         	return;
     	}
 
-		flag = 1;
+		main_flag = 1;
 	
 		TCB* next_thread =popFromReadyQueue();
 		if(next_thread==running_thread){
 			printf("no other thread to run\n");
 		}
+		cout<<"main flag and flag in main branch: "<<main_flag<<0<<flag<<endl;
 		running_thread = next_thread;
 		setcontext(r_context);// 
 	}
 	else{
+		printf("in else of switch threads\n");
 		ucontext_t* r_context = running_thread->getContext();
 		int ret_val = getcontext(r_context);
-	//  cout << "SWITCH: running thread = " << running_thread->getId() << endl;
-	if (flag == 1) {
-        return;
-    }
+		cout<<"main flag and flag: "<<main_flag<<flag<<endl;
+		if (flag == 1) {
+			printf("flag==1 in else of switch threads\n");
+			return;
+		}
 
-	flag = 1;
-	
-	addToReadyQueue(running_thread);
-	TCB* next_thread =popFromReadyQueue();
-	if(next_thread==running_thread){
-		printf("no other thread to run\n");
-	}
-    running_thread = next_thread;
-    setcontext(r_context);// 
+		flag = 1;
+		printf("first time in else of switch after setting flag\n");
+		addToReadyQueue(running_thread);
+		TCB* next_thread =popFromReadyQueue();
+		cout<<"Next thread in else sta"<<next_thread->getId()<<endl;
+		if(next_thread==running_thread){
+			printf("no other thread to run\n");
+		}
+		running_thread = next_thread;
+		setcontext(next_thread->getContext());// 
 	}
 
 	
@@ -333,7 +337,7 @@ void* y(void* x)
 	int i =0;
 	while (1) {
 		++i;
-		cout << "in x (" << i << ")" << endl;
+		cout << "in y (" << i << ")" << endl;
 		if (i % 3 == 0) {
 			cout << "y: switching" <<x<< endl;
 			switchThreads();
@@ -350,8 +354,12 @@ int main()
 	printf("after first create\n");
 	uthread_create(y,(void*)1);
 	printf("after second create\n");
+	for (const auto& element : ready_queue) {
+        cout << element->getId() << " here is the id"<<endl;
+    }
 	ucontext_t* context = threads[0]->getContext();
 	setcontext(context);
+	
 	while(1){
 		i++;
 	}
