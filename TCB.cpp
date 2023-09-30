@@ -27,8 +27,8 @@ TCB::TCB(int tid,void *(*start_routine)(void *arg), void *arg, State state)
 
 TCB::~TCB()
 {
-    delete[] _context->uc_stack.ss_sp;
-    delete[] _context->uc_stack.ss_size;
+    delete[] this->_context->uc_stack.ss_sp;
+    delete[] this->_context->uc_stack.ss_size;
 }
 
 void TCB::setState(State state)
