@@ -256,7 +256,7 @@ int uthread_init(int quantum_usecs)
 
 	while (1) {
 		if (running_thread!=nullptr) {
-			if (running_thread->remainingTime <= 0) {
+			if (running_thread->quantum <= 0) {
 				addToReadyQue(running_thread);
 				running_thread = nullptr;
 			}
@@ -268,12 +268,12 @@ int uthread_init(int quantum_usecs)
 
 		if (running_thread != nullptr) {
             	cout << "Running Thread " << running_thread->getid() << endl;
-            	running_thread->remainingTime -= quantum_usecs;
+            	running_thread->quantum -= quantum_usecs;
         }
         usleep(quantum_usecs);
 	}
 	
-	return -1;
+	return 0;
 }
 
 int uthread_create(void *(*start_routine)(void *), void *arg)
