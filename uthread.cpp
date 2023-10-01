@@ -267,7 +267,7 @@ int uthread_init(int quantum_usecs)
 		}
 
 		if (running_thread != nullptr) {
-            	cout << "Running Thread " << running_thread->getid() << endl;
+            	cout << "Running Thread " << running_thread->getId() << endl;
             	running_thread->quantum -= quantum_usecs;
         }
         usleep(quantum_usecs);
