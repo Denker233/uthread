@@ -386,6 +386,10 @@ void* y(void* x)
 			cout << "y: switching" <<x<< endl;
 			switchThreads(1);
 		}
+		if(i>5){
+			uthread_yield();
+			printf("after calling yield\n");
+		}
 		sleep(1); 
 	}
 }
