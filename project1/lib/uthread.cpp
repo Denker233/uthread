@@ -183,6 +183,16 @@ int removeFromReadyQueue(int tid)
 }
 
 // Helper functions ------------------------------------------------------------
+int find_if_terminated(int tid){
+	for (deque<finished_queue_entry_t *>::iterator iter = finished_queue.begin(); iter != finished_queue.end(); ++iter)
+	{
+		if (tid == (*iter)->tcb->getId())
+		{
+			return 1;
+		}
+	}
+	return -1;
+}
 
 // Switch to the next ready thread
 static void switchThreads(int placeholder)
@@ -305,10 +315,24 @@ int uthread_join(int tid, void **retval)
 	// If the thread specified by tid is already terminated, just return
 	// If the thread specified by tid is still running, block until it terminates
 	// Set *retval to be the result of thread if retval != nullptr
-	// if(thread[tid]==nullptr){
-	// 	// terminated
-	// 	return 1;
-	// }
+	for(finished_queue_entry_t* entry:finished_queue){
+		if (entry->tcb->getId()==tid){
+			return 1;
+		}
+	}
+	if(threads[tid]->getState()==RUNNING){
+		join_queue_entry_t * join_entry =new join_queue_entry_t;
+		join_entry->tcb = running_thread;
+		join_entry->waiting_for_tid = tid;
+		addToJoinQueue(join_entry);
+		running_thread->setState(BLOCK);
+		while(threads[tid]->getState()!=FINISHED){
+			continue;
+		}
+		//clean up
+
+		
+	}
 	// if(thread[tid]->getState()==RUNNING){
 	// 	while
 	// }
@@ -328,6 +352,7 @@ void uthread_exit(void *retval)
 	// If this is the main thread, exit the program
 	// Move any threads joined on this thread back to the ready queue
 	// Move this thread to the finished queue
+	//if other thread is waiting for me then alert
 }
 
 int uthread_suspend(int tid)
@@ -381,15 +406,16 @@ void* y(void* x)
 	int i =0;
 	while (1) {
 		++i;
-		cout << "in y (" << i << ")" << endl;
-		if (i % 3 == 0) {
-			cout << "y: switching" <<x<< endl;
-			switchThreads(1);
-		}
 		if(i>5){
+			cout << "y: switching" <<x<< endl;
 			uthread_yield();
 			printf("after calling yield\n");
+			cout << "in y (" << i << ")" << endl;
 		}
+		// if (i % 3 == 0) {
+		// 	cout << "y: switching" <<x<< endl;
+		// 	switchThreads(1);
+		// }
 		sleep(1); 
 	}
 }
@@ -406,8 +432,7 @@ int main()
 	for (const auto& element : ready_queue) {
         cout << element->getId() << " here is the id"<<endl;
     }
-	ucontext_t* context = threads[0]->getContext();
-	setcontext(context);
+	switchThreads(1);
 	
 	while(1){
 		i++;

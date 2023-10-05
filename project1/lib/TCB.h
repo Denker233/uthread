@@ -14,7 +14,7 @@
 using namespace std;
 
 extern void stub(void *(*start_routine)(void *), void *arg);
-enum State {READY, RUNNING, BLOCK};
+enum State {READY, RUNNING, BLOCK,FINISHED};
 
 
 /*
