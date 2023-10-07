@@ -113,6 +113,7 @@ int main(int argc, char *argv[])
         int tid = uthread_create(worker, &points_per_thread);
         threads[i] = tid;
     }
+    printf("after create all the thread\n");
 
     /* Join each thread and compute the result */
     unsigned long g_cnt = 0;

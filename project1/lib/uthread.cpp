@@ -64,7 +64,8 @@ static deque<join_queue_entry_t *> join_queue;
 
 // Start a countdown timer to fire an interrupt
 static void startInterruptTimer(int quantum_usecs)
-{
+{	
+	printf("inside start interrupt\n");
 	// TODO
 	timer.it_value.tv_sec = 0;
    	timer.it_value.tv_usec = quantum_usecs;
@@ -75,14 +76,16 @@ static void startInterruptTimer(int quantum_usecs)
 
 //disable and enable interrupt functions are from code example on Canvas
 static void disableInterrupts()
-{
+{	
+	printf("inside disable interrupt\n");
     assert(interrupts_enabled);
     sigprocmask(SIG_BLOCK,&sa.sa_mask, NULL);
     interrupts_enabled = false;
 }
 
 static void enableInterrupts()
-{
+{	
+	printf("inside able interrupt\n");
     assert(!interrupts_enabled);
     interrupts_enabled = true;
     sigprocmask(SIG_UNBLOCK,&sa.sa_mask, NULL);
@@ -198,6 +201,7 @@ int find_if_terminated(int tid){
 static void switchThreads(int placeholder)
 {	disableInterrupts();
 	// TODO
+	printf("inside swithc context\n");
 	volatile int main_flag = 0, flag=0;
 	if(running_thread==nullptr){// main thread
 		
@@ -267,9 +271,8 @@ int uthread_init(int quantum_usecs)
   	
 
 	// no thread at  queue then switch back to main thread
-	main_thread_context = new ucontext_t;
-	int ret_val = getcontext(main_thread_context);
-	
+	TCB* main_thread = new TCB(0,RUNNING);
+	running_thread = main_thread;
 
 	// while (1) {
 	// 	if (running_thread!=nullptr) {
@@ -317,11 +320,17 @@ int uthread_join(int tid, void **retval)
 	// Set *retval to be the result of thread if retval != nullptr
 	for(finished_queue_entry_t* entry:finished_queue){
 		if (entry->tcb->getId()==tid){
+			if(retval!=nullptr){
+				*retval=entry->result;
+			}
 			return 1;
 		}
 	}
-	if(threads[tid]->getState()==RUNNING){
-		join_queue_entry_t * join_entry =new join_queue_entry_t;
+	
+	
+	if(threads[tid]==running_thread){
+		printf("in the if of join\n");
+		join_queue_entry_t* join_entry =new join_queue_entry_t;
 		join_entry->tcb = running_thread;
 		join_entry->waiting_for_tid = tid;
 		addToJoinQueue(join_entry);
@@ -329,10 +338,24 @@ int uthread_join(int tid, void **retval)
 		while(threads[tid]->getState()!=FINISHED){
 			continue;
 		}
+		if(retval!=nullptr){
+			for(finished_queue_entry_t* entry:finished_queue){
+				if (entry->tcb->getId()==tid){
+					*retval=entry->result;
+				}
+			}
+		}	
 		//clean up
+		finished_queue_entry_t* finish_entry = new finished_queue_entry_t;
+		addToFinishQueue(finish_entry);
+		delete threads[tid];
+		threads[tid] = nullptr;
+		return 1;
 
 		
 	}
+	
+	printf("after the if\n");
 	// if(thread[tid]->getState()==RUNNING){
 	// 	while
 	// }
@@ -353,18 +376,76 @@ void uthread_exit(void *retval)
 	// Move any threads joined on this thread back to the ready queue
 	// Move this thread to the finished queue
 	//if other thread is waiting for me then alert
+	if(threads[0]->getState()==RUNNING){
+		printf("main thread exiting!!!\n");
+		exit(0);
+	}
+	for(join_queue_entry_t* join_entry:join_queue){
+		if(join_entry->waiting_for_tid==running_thread->getId()){
+			threads[join_entry->waiting_for_tid]->setState(READY);
+			addToReadyQueue(threads[join_entry->waiting_for_tid]);
+			removeFromFinishedQueue(join_entry->waiting_for_tid);
+		}
+	}
+	running_thread->setState(FINISHED);
+	//add it to the fisnihed queue in join()
+	
+
 }
 
 int uthread_suspend(int tid)
 {
 	// Move the thread specified by tid from whatever state it is
 	// in to the block queue
-	return -1;
+	if(threads[tid]->getState()==RUNNING){
+		join_queue_entry_t * join_entry =new join_queue_entry_t;
+		join_entry->tcb = threads[tid];
+		addToJoinQueue(join_entry);
+		threads[tid]->setState(BLOCK);
+		switchThreads(1);
+		return 1;
+
+	}
+	else if (threads[tid]->getState()==BLOCK){
+		printf("BLOCK already!\n");
+		return -1;
+	}
+	else if (threads[tid]->getState()==READY){
+		removeFromReadyQueue(tid);
+		join_queue_entry_t * join_entry =new join_queue_entry_t;
+		join_entry->tcb = threads[tid];
+		join_entry->waiting_for_tid = tid;
+		addToJoinQueue(join_entry);
+		return 1;
+	}
+	else {
+		printf("Finished already!\n");
+		return -1;
+	}
+	
 }
 
 int uthread_resume(int tid)
 {
 	// Move the thread specified by tid back to the ready queue
+	if(threads[tid]->getState()==RUNNING){
+		printf("Running already!\n");
+		return -1;
+	}
+	else if (threads[tid]->getState()==BLOCK){
+		removeFromJoinQueue(tid);
+		threads[tid]->setState(READY);
+		addToReadyQueue(threads[tid]);
+		return 1;
+	}
+	else if (threads[tid]->getState()==READY){
+		printf("ready already!\n");
+		return -1;
+	}
+	else {
+		printf("Finished already!\n");
+		return -1;
+	}
 	return -1;
 }
 
@@ -420,23 +501,23 @@ void* y(void* x)
 	}
 }
 
-int main() 
-{	
-	uthread_init(3);
-	int i =1;
-	cout<<"Entrying main thread..."<<endl;
-	uthread_create(x,(void*)1);
-	printf("after first create\n");
-	uthread_create(y,(void*)1);
-	printf("after second create\n");
-	for (const auto& element : ready_queue) {
-        cout << element->getId() << " here is the id"<<endl;
-    }
-	switchThreads(1);
+// int main() 
+// {	
+// 	uthread_init(3);
+// 	int i =1;
+// 	cout<<"Entrying main thread..."<<endl;
+// 	uthread_create(x,(void*)1);
+// 	printf("after first create\n");
+// 	uthread_create(y,(void*)1);
+// 	printf("after second create\n");
+// 	for (const auto& element : ready_queue) {
+//         cout << element->getId() << " here is the id"<<endl;
+//     }
+// 	switchThreads(1);
 	
-	while(1){
-		i++;
-	}
+// 	while(1){
+// 		i++;
+// 	}
 	
-	return 0;
-}
+// 	return 0;
+// }

@@ -24,10 +24,17 @@ TCB::TCB(int tid,void *(*start_routine)(void *arg), void *arg, State state)
 
     
 }
+TCB::TCB(int tid,State state){
+    this->_context = new ucontext_t;
+    saveContext();
+
+    this->_tid=tid;
+    this->_state = state;
+}
 
 TCB::~TCB()
 {
-    delete this->sp;
+    delete[] this->_stack;
     delete this->_context;
 }
 
