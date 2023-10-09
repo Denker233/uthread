@@ -215,6 +215,10 @@ static void switchThreads(int placeholder)
 			printf("no other thread to run\n");
 		}
 		cout<<"main flag and flag in main branch: "<<main_flag<<":"<<flag<<endl;
+		if (running_thread->getState()==RUNNING||running_thread->getState()==READY){
+			running_thread->setState(READY);
+			addToReadyQueue(running_thread);
+		}
 		running_thread = next_thread;
 		running_thread->setState(RUNNING);
 		enableInterrupts();
@@ -224,7 +228,10 @@ static void switchThreads(int placeholder)
 		printf("in else of switch threads\n");
 		ucontext_t* r_context = running_thread->getContext();
 		int ret_val = getcontext(r_context);
-		cout<<"main flag and flag: "<<main_flag<<flag<<endl;
+		// if(ready_queue.empty()){
+		// 	cout<<"The ready queue is empty "<<running_thread->getId()<<endl;
+		// 	flag=1;
+		// }
 		if (flag == 1) {
 			printf("flag==1 in else of switch threads\n");
 			if(running_thread->getId()==0){
@@ -235,8 +242,11 @@ static void switchThreads(int placeholder)
 
 		flag = 1;
 		printf("first time in else of switch after setting flag\n");
-		running_thread->setState(READY);
-		addToReadyQueue(running_thread);
+		if (running_thread->getState()==RUNNING||running_thread->getState()==READY){
+			running_thread->setState(READY);
+			addToReadyQueue(running_thread);
+		}
+		
 		TCB* next_thread =popFromReadyQueue();
 		cout<<"Next thread in else"<<next_thread->getId()<<endl;
 		if(next_thread==running_thread){
@@ -261,8 +271,8 @@ static void switchThreads(int placeholder)
 void stub(void *(*start_routine)(void *), void *arg)
 {
 	// TODO
-	start_routine(arg);
-	uthread_exit(0);
+	void* result=start_routine(arg);
+	uthread_exit(result);
 }
 
 
@@ -315,15 +325,14 @@ int uthread_join(int tid, void **retval)
 		cout<<entry->tcb->getId()<<endl;
 		if (entry->tcb->getId()==tid){
 			if(retval!=nullptr){
-				cout<<"result inside join"<<entry->result<<endl;
 				*retval=entry->result;
 			}
 			return 1;
 		}
 	}
 	printf("inside join\n");
-	cout<<"the id of the join thread"<<threads[tid]->getId()<<endl;
-	cout<<"the state of the join thread"<<threads[tid]->getState()<<endl;
+	cout<<"the id of the join thread "<<threads[tid]->getId()<<endl;
+	cout<<"the state of the join thread "<<threads[tid]->getState()<<endl;
 	if(threads[tid]->getState()==RUNNING||threads[tid]->getState()==READY){
 		printf("in the if of join\n");
 		join_queue_entry_t* join_entry =new join_queue_entry_t;
@@ -336,15 +345,16 @@ int uthread_join(int tid, void **retval)
 		}
 		printf("after the while loop in join\n");
 		if(retval!=nullptr){
+			printf("inside the retval!=nullptr\n");
 			for(finished_queue_entry_t* entry:finished_queue){
+				printf("in the iterating finished queue\n");
 				if (entry->tcb->getId()==tid){
+					cout<<"Result in the join"<<entry->result<<endl;
 					*retval=entry->result;
 				}
 			}
 		}	
 		//clean up
-		finished_queue_entry_t* finish_entry = new finished_queue_entry_t;
-		addToFinishQueue(finish_entry);
 		delete threads[tid];
 		threads[tid] = nullptr;
 		return 1;
@@ -373,20 +383,30 @@ void uthread_exit(void *retval)
 	// Move any threads joined on this thread back to the ready queue
 	// Move this thread to the finished queue
 	//if other thread is waiting for me then alert
-
+	cout<<"The result in exit is: "<<retval;
 	if(threads[0]->getState()==RUNNING){
 		printf("main thread exiting!!!\n");
 		exit(0);
 	}
 	for(join_queue_entry_t* join_entry:join_queue){
 		if(join_entry->waiting_for_tid==running_thread->getId()){
-			uthread_resume(join_entry->waiting_for_tid);
-			cout<<"Resumed tid"<<join_entry->waiting_for_tid<<endl;
+			uthread_resume(join_entry->tcb->getId());
+			cout<<"Resumed tid"<<join_entry->tcb->getId()<<endl;
 		}
 	}
 	cout<<"running thread id in exit"<<running_thread->getId()<<endl;
+	finished_queue_entry_t* finish_entry = new finished_queue_entry_t;
+	finish_entry->tcb = running_thread;
+	finish_entry->result=retval;
+	addToFinishQueue(finish_entry);
 	running_thread->setState(FINISHED);
 	uthread_yield();
+	// if(!ready_queue.empty()){
+	// 	uthread_yield();
+	// }
+	// else{
+
+	// }
 	//add it to the fisnihed queue in join()
 	
 
@@ -464,7 +484,7 @@ int uthread_get_total_quantums()
 	int retval = 0;
 	for(int i = 0; i < MAX_THREAD_NUM;i++){
 		if(threads[i]!=nullptr){
-			retval += thread[i]->getQuantum();
+			retval += threads[i]->getQuantum();
 		}
 	}
 	return retval;

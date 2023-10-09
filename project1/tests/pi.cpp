@@ -12,10 +12,11 @@ using namespace std;
 #define MAX_POINTS 1000000
 
 void *worker(void *arg)
-{
+{   
+    printf("inside worker\n");
     /* Retrieve our thread ID */
     int my_tid = uthread_self();
-
+    printf("after self\n");
     /* Extract the points per thread argument */
     int points_per_thread = *(int *)arg;
 
@@ -45,6 +46,7 @@ void *worker(void *arg)
     /* Allocate a unsigned long pointer and assign local count to it to return to the parent */
     unsigned long *return_buffer = new unsigned long;
     *return_buffer = local_cnt;
+    cout<<"result is here:"<<return_buffer<<endl;
     return return_buffer;
 }
 
@@ -112,6 +114,8 @@ int main(int argc, char *argv[])
     {
         int tid = uthread_create(worker, &points_per_thread);
         threads[i] = tid;
+        cout<<"all the id"<<tid<<endl;
+        cout<<"all the state"<<endl;
     }
     printf("after create all the thread\n");
 
@@ -121,14 +125,20 @@ int main(int argc, char *argv[])
     {
         /* Collect the result from the user via their allocated heap pointer */
         unsigned long *local_cnt;
+        cout<<"Local_cnt:"<<local_cnt<<endl;
+        cout<<"each id"<<threads[i]<<endl;
         uthread_join(threads[i], (void **)&local_cnt);
-
+        // if(*local_cnt==nullptr){
+        //     printf("result is null\n");
+        // }
+        cout<<"Local_cnt:"<<local_cnt<<endl;
         /* Deallocate pointer to get the actual count*/
         g_cnt += *local_cnt;
 
         /* Deallocate thread result on the heap */
         delete local_cnt;
     }
+    cout<<"final answer:"<<g_cnt<<endl;
 
     delete[] threads;
 
