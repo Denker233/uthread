@@ -4,6 +4,8 @@
 #include <deque>
 #include <signal.h>
 #include <sys/time.h>
+#include <mutex>
+#include <condition_variable>
 
 using namespace std;
 
@@ -43,9 +45,11 @@ struct sigaction sa;
 static bool interrupts_enabled = true;
 struct itimerval timer;
 
+
 int find_next_index(){
 	for(int i = 0; i < MAX_THREAD_NUM;i++){
 		if(threads[i]==nullptr){
+			cout<<"each index inside find next index"<<i<<endl;
 			return i;
 		}
 	}
@@ -223,6 +227,9 @@ static void switchThreads(int placeholder)
 		cout<<"main flag and flag: "<<main_flag<<flag<<endl;
 		if (flag == 1) {
 			printf("flag==1 in else of switch threads\n");
+			if(running_thread->getId()==0){
+				printf("main thread exitting\n");
+			}
 			return;
 		}
 
@@ -231,7 +238,7 @@ static void switchThreads(int placeholder)
 		running_thread->setState(READY);
 		addToReadyQueue(running_thread);
 		TCB* next_thread =popFromReadyQueue();
-		cout<<"Next thread in else sta"<<next_thread->getId()<<endl;
+		cout<<"Next thread in else"<<next_thread->getId()<<endl;
 		if(next_thread==running_thread){
 			printf("no other thread to run\n");
 		}
@@ -273,25 +280,8 @@ int uthread_init(int quantum_usecs)
 	// no thread at  queue then switch back to main thread
 	TCB* main_thread = new TCB(0,RUNNING);
 	running_thread = main_thread;
+	threads[0]=main_thread;
 
-	// while (1) {
-	// 	if (running_thread!=nullptr) {
-	// 		if (running_thread->quantum <= 0) {
-	// 			addToReadyQue(running_thread);
-	// 			running_thread = nullptr;
-	// 		}
-	// 	} else {
-	// 		if (ready_queue != nullptr) {
-	// 			TCB* next_thread = popFromReadyQueue();
-	// 			running_thread = next_thread;
-	// 	}
-
-	// 	if (running_thread != nullptr) {
-    //         	cout << "Running Thread " << running_thread->getId() << endl;
-    //         	running_thread->quantum -= quantum_usecs;
-    //     }
-    //     usleep(quantum_usecs);
-	// }
 	
 	return 0;
 }
@@ -309,8 +299,9 @@ int uthread_create(void *(*start_routine)(void *), void *arg)
     makecontext((context),(void (*)(void))(stub),2,start_routine,arg);
 	addToReadyQueue(tcb);
 	printf("end of thread_create\n");
+	cout<<"the state of all thread"<<threads[next_thread_index]->getState()<<endl;
 	enableInterrupts();
-    return 1;
+    return next_thread_index;
 }
 
 int uthread_join(int tid, void **retval)
@@ -318,17 +309,22 @@ int uthread_join(int tid, void **retval)
 	// If the thread specified by tid is already terminated, just return
 	// If the thread specified by tid is still running, block until it terminates
 	// Set *retval to be the result of thread if retval != nullptr
+	cout<<"running thread "<<running_thread->getId()<< "and waiting for "<<tid<<endl;
 	for(finished_queue_entry_t* entry:finished_queue){
+		printf("inside the loop\n");
+		cout<<entry->tcb->getId()<<endl;
 		if (entry->tcb->getId()==tid){
 			if(retval!=nullptr){
+				cout<<"result inside join"<<entry->result<<endl;
 				*retval=entry->result;
 			}
 			return 1;
 		}
 	}
-	
-	
-	if(threads[tid]==running_thread){
+	printf("inside join\n");
+	cout<<"the id of the join thread"<<threads[tid]->getId()<<endl;
+	cout<<"the state of the join thread"<<threads[tid]->getState()<<endl;
+	if(threads[tid]->getState()==RUNNING||threads[tid]->getState()==READY){
 		printf("in the if of join\n");
 		join_queue_entry_t* join_entry =new join_queue_entry_t;
 		join_entry->tcb = running_thread;
@@ -338,6 +334,7 @@ int uthread_join(int tid, void **retval)
 		while(threads[tid]->getState()!=FINISHED){
 			continue;
 		}
+		printf("after the while loop in join\n");
 		if(retval!=nullptr){
 			for(finished_queue_entry_t* entry:finished_queue){
 				if (entry->tcb->getId()==tid){
@@ -354,7 +351,7 @@ int uthread_join(int tid, void **retval)
 
 		
 	}
-	
+	printf("before after the if\n");
 	printf("after the if\n");
 	// if(thread[tid]->getState()==RUNNING){
 	// 	while
@@ -362,11 +359,11 @@ int uthread_join(int tid, void **retval)
 	return -1;
 }
 
-int uthread_yield(void)
+int uthread_yield()
 {
 	// TODO
-	switchThreads(1);
 	setitimer(ITIMER_VIRTUAL, &timer, nullptr);
+	switchThreads(1);
 	return 1;
 }
 
@@ -376,18 +373,20 @@ void uthread_exit(void *retval)
 	// Move any threads joined on this thread back to the ready queue
 	// Move this thread to the finished queue
 	//if other thread is waiting for me then alert
+
 	if(threads[0]->getState()==RUNNING){
 		printf("main thread exiting!!!\n");
 		exit(0);
 	}
 	for(join_queue_entry_t* join_entry:join_queue){
 		if(join_entry->waiting_for_tid==running_thread->getId()){
-			threads[join_entry->waiting_for_tid]->setState(READY);
-			addToReadyQueue(threads[join_entry->waiting_for_tid]);
-			removeFromFinishedQueue(join_entry->waiting_for_tid);
+			uthread_resume(join_entry->waiting_for_tid);
+			cout<<"Resumed tid"<<join_entry->waiting_for_tid<<endl;
 		}
 	}
+	cout<<"running thread id in exit"<<running_thread->getId()<<endl;
 	running_thread->setState(FINISHED);
+	uthread_yield();
 	//add it to the fisnihed queue in join()
 	
 
@@ -402,7 +401,7 @@ int uthread_suspend(int tid)
 		join_entry->tcb = threads[tid];
 		addToJoinQueue(join_entry);
 		threads[tid]->setState(BLOCK);
-		switchThreads(1);
+		setitimer(ITIMER_VIRTUAL, &timer, nullptr);
 		return 1;
 
 	}
@@ -430,7 +429,7 @@ int uthread_resume(int tid)
 	// Move the thread specified by tid back to the ready queue
 	if(threads[tid]->getState()==RUNNING){
 		printf("Running already!\n");
-		return -1;
+		return 1;
 	}
 	else if (threads[tid]->getState()==BLOCK){
 		removeFromJoinQueue(tid);
@@ -452,19 +451,29 @@ int uthread_resume(int tid)
 int uthread_self()
 {
 	// TODO
+	if (running_thread != nullptr) {
+		return running_thread->getId();
+	}
 	return -1;
+	
 }
 
 int uthread_get_total_quantums()
 {
 	// TODO
-	return -1;
+	int retval = 0;
+	for(int i = 0; i < MAX_THREAD_NUM;i++){
+		if(threads[i]!=nullptr){
+			retval += thread[i]->getQuantum();
+		}
+	}
+	return retval;
 }
 
 int uthread_get_quantums(int tid)
 {
 	// TODO
-	return -1;
+	return threads[tid]->getQuantum();
 }
 void* x(void* y)
 {	
