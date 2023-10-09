@@ -11,10 +11,10 @@ TCB::TCB(int tid,void *(*start_routine)(void *arg), void *arg, State state)
     this->_state = state;
 
     this->_stack = new char[STACK_SIZE];
-    this->sp = this->_stack + STACK_SIZE;
+    // this->sp = this->_stack + STACK_SIZE;
 
     // this->pc = &stub;
-    this->_context->uc_stack.ss_sp = this->sp;
+    this->_context->uc_stack.ss_sp = this->_stack;
     this->_context->uc_stack.ss_size = STACK_SIZE;
     this->_context->uc_stack.ss_flags = 0;
 

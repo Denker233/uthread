@@ -223,12 +223,14 @@ static void switchThreads(int placeholder)
 		running_thread->setState(READY);
 		addToReadyQueue(running_thread);
 	}
+	// if(running_thread->getState()==FINISHED&&running_thread->getId()!=0){//from yield
+	// 	cout<<"Delete id: "<<running_thread->getId()<<endl;
+	// 	delete threads[running_thread->getId()];
+	// 	threads[running_thread->getId()] = nullptr;
+	// }
 	
 	TCB* next_thread =popFromReadyQueue();
 	cout<<"Next thread in else"<<next_thread->getId()<<endl;
-	if(next_thread==running_thread){
-		printf("no other thread to run\n");
-	}
 	running_thread = next_thread;
 	running_thread->setState(RUNNING);
 	enableInterrupts();
@@ -257,7 +259,14 @@ int uthread_init(int quantum_usecs)
 	// Initialize any data structures
 	// Setup timer interrupt and handler
 	// Create a thread for the caller (main) thread
-	sa.sa_handler = &switchThreads;
+	sa.sa_handler = switchThreads;
+	sa.sa_flags=0;
+	if (sigemptyset(&sa.sa_mask) < -1)
+    {
+        cout << "ERROR: Failed to empty to set" << endl;
+        exit(1);
+    }
+
 	sigaction(SIGVTALRM, &sa, nullptr);
 
 	startInterruptTimer(quantum_usecs);
@@ -301,7 +310,19 @@ int uthread_join(int tid, void **retval)
 		if (entry->tcb->getId()==tid){
 			if(retval!=nullptr){
 				*retval=entry->result;
+				cout<<"Delete id: "<<tid<<endl;
+			// delete threads[tid];
+			// threads[tid] = nullptr;
+				removeFromFinishedQueue(tid);
+				delete threads[tid];
+				threads[tid] = nullptr;
 			}
+			// cout<<"Delete id: "<<tid<<endl;
+			// // delete threads[tid];
+			// // threads[tid] = nullptr;
+			// removeFromFinishedQueue(tid);
+			// delete threads[tid];
+			// threads[tid] = nullptr;
 			return 1;
 		}
 	}
@@ -329,6 +350,7 @@ int uthread_join(int tid, void **retval)
 			}
 		}	
 		//clean up
+		cout<<"Delete id: "<<tid<<endl;
 		delete threads[tid];
 		threads[tid] = nullptr;
 		return 1;
@@ -341,7 +363,7 @@ int uthread_join(int tid, void **retval)
 int uthread_yield()
 {
 	// TODO
-	setitimer(ITIMER_VIRTUAL, &timer, nullptr);
+	// setitimer(ITIMER_VIRTUAL, &timer, nullptr);
 	switchThreads(1);
 	return 1;
 }

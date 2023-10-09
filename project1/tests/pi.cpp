@@ -46,7 +46,7 @@ void *worker(void *arg)
     /* Allocate a unsigned long pointer and assign local count to it to return to the parent */
     unsigned long *return_buffer = new unsigned long;
     *return_buffer = local_cnt;
-    cout<<"result is here:"<<*return_buffer<<endl;
+    // cout<<"result is here:"<<*return_buffer<<endl;
     return return_buffer;
 }
 
