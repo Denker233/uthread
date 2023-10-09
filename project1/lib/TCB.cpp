@@ -17,10 +17,6 @@ TCB::TCB(int tid,void *(*start_routine)(void *arg), void *arg, State state)
     this->_context->uc_stack.ss_sp = this->sp;
     this->_context->uc_stack.ss_size = STACK_SIZE;
     this->_context->uc_stack.ss_flags = 0;
-    // *(this->sp) = arg;
-    // this->sp--;
-    // *(this->sp) = start_routine;
-    // this->sp--;
 
     
 }

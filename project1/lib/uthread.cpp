@@ -207,57 +207,33 @@ static void switchThreads(int placeholder)
 	// TODO
 	printf("inside swithc context\n");
 	volatile int main_flag = 0, flag=0;
-	if(running_thread==nullptr){// main thread
-		
-		printf("main thread switching\n");
-		TCB* next_thread =popFromReadyQueue();
-		if(next_thread==running_thread){
-			printf("no other thread to run\n");
+	printf("in else of switch threads\n");
+	ucontext_t* r_context = running_thread->getContext();
+	int ret_val = getcontext(r_context);
+	if (flag == 1) {
+		printf("flag==1 in else of switch threads\n");
+		if(running_thread->getId()==0){
+			printf("main thread exitting\n");
 		}
-		cout<<"main flag and flag in main branch: "<<main_flag<<":"<<flag<<endl;
-		if (running_thread->getState()==RUNNING||running_thread->getState()==READY){
-			running_thread->setState(READY);
-			addToReadyQueue(running_thread);
-		}
-		running_thread = next_thread;
-		running_thread->setState(RUNNING);
-		enableInterrupts();
-		setcontext(running_thread->getContext());// 
+		return;
 	}
-	else{
-		printf("in else of switch threads\n");
-		ucontext_t* r_context = running_thread->getContext();
-		int ret_val = getcontext(r_context);
-		// if(ready_queue.empty()){
-		// 	cout<<"The ready queue is empty "<<running_thread->getId()<<endl;
-		// 	flag=1;
-		// }
-		if (flag == 1) {
-			printf("flag==1 in else of switch threads\n");
-			if(running_thread->getId()==0){
-				printf("main thread exitting\n");
-			}
-			return;
-		}
-
-		flag = 1;
-		printf("first time in else of switch after setting flag\n");
-		if (running_thread->getState()==RUNNING||running_thread->getState()==READY){
-			running_thread->setState(READY);
-			addToReadyQueue(running_thread);
-		}
-		
-		TCB* next_thread =popFromReadyQueue();
-		cout<<"Next thread in else"<<next_thread->getId()<<endl;
-		if(next_thread==running_thread){
-			printf("no other thread to run\n");
-		}
-		running_thread = next_thread;
-		running_thread->setState(RUNNING);
-		enableInterrupts();
-		setcontext(next_thread->getContext());// 
+	flag = 1;
+	printf("first time in else of switch after setting flag\n");
+	if (running_thread->getState()==RUNNING||running_thread->getState()==READY){
+		running_thread->setState(READY);
+		addToReadyQueue(running_thread);
 	}
-
+	
+	TCB* next_thread =popFromReadyQueue();
+	cout<<"Next thread in else"<<next_thread->getId()<<endl;
+	if(next_thread==running_thread){
+		printf("no other thread to run\n");
+	}
+	running_thread = next_thread;
+	running_thread->setState(RUNNING);
+	enableInterrupts();
+	setcontext(next_thread->getContext());// 
+	
 	
 
 }
@@ -321,7 +297,6 @@ int uthread_join(int tid, void **retval)
 	// Set *retval to be the result of thread if retval != nullptr
 	cout<<"running thread "<<running_thread->getId()<< "and waiting for "<<tid<<endl;
 	for(finished_queue_entry_t* entry:finished_queue){
-		printf("inside the loop\n");
 		cout<<entry->tcb->getId()<<endl;
 		if (entry->tcb->getId()==tid){
 			if(retval!=nullptr){
@@ -347,7 +322,6 @@ int uthread_join(int tid, void **retval)
 		if(retval!=nullptr){
 			printf("inside the retval!=nullptr\n");
 			for(finished_queue_entry_t* entry:finished_queue){
-				printf("in the iterating finished queue\n");
 				if (entry->tcb->getId()==tid){
 					cout<<"Result in the join"<<entry->result<<endl;
 					*retval=entry->result;
@@ -361,11 +335,6 @@ int uthread_join(int tid, void **retval)
 
 		
 	}
-	printf("before after the if\n");
-	printf("after the if\n");
-	// if(thread[tid]->getState()==RUNNING){
-	// 	while
-	// }
 	return -1;
 }
 
@@ -401,13 +370,6 @@ void uthread_exit(void *retval)
 	addToFinishQueue(finish_entry);
 	running_thread->setState(FINISHED);
 	uthread_yield();
-	// if(!ready_queue.empty()){
-	// 	uthread_yield();
-	// }
-	// else{
-
-	// }
-	//add it to the fisnihed queue in join()
 	
 
 }
@@ -421,7 +383,7 @@ int uthread_suspend(int tid)
 		join_entry->tcb = threads[tid];
 		addToJoinQueue(join_entry);
 		threads[tid]->setState(BLOCK);
-		setitimer(ITIMER_VIRTUAL, &timer, nullptr);
+		uthread_yield();
 		return 1;
 
 	}
@@ -433,7 +395,8 @@ int uthread_suspend(int tid)
 		removeFromReadyQueue(tid);
 		join_queue_entry_t * join_entry =new join_queue_entry_t;
 		join_entry->tcb = threads[tid];
-		join_entry->waiting_for_tid = tid;
+		join_entry->waiting_for_tid = running_thread->getId();
+		threads[tid]->setState(BLOCK);
 		addToJoinQueue(join_entry);
 		return 1;
 	}
