@@ -52,4 +52,6 @@ int uthread_get_total_quantums();
 // Return the thread quantum set count
 int uthread_get_quantums(int tid);
 
+void test_resume();
+void test_suspend();
 #endif

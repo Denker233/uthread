@@ -119,6 +119,10 @@ int main(int argc, char *argv[])
     }
     printf("after create all the thread\n");
 
+    // test_suspend();
+    // test_resume();
+    
+
     printf("Testing suspend function...\n");
     for (int i = 0; i < thread_count; i++)
     {
@@ -156,17 +160,6 @@ int main(int argc, char *argv[])
     }
     cout<<"final answer:"<<g_cnt<<endl;
 
-    printf("Testing uthread_get_quantums function...\n");
-    for (int i = 0; i < thread_count; i++)
-    {
-        int res_quantums = uthread_get_quantums(threads[i]);
-        cout<<"Result "<<i<<": "<<res_quantums<<endl;
-    }
-    printf("Testing completed!\n");
-
-    printf("The total quantum is:\n");
-    int total_quantum = uthread_get_total_quantums();
-    cout<<total_quantum<<endl;
 
     delete[] threads;
 

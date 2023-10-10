@@ -40,7 +40,6 @@ int fire_time=0;
 TCB* running_thread;
 TCB* threads[MAX_THREAD_NUM]={nullptr};
 int next_thread_index=0;
-ucontext_t* main_thread_context;
 struct sigaction sa;
 static bool interrupts_enabled = true;
 
@@ -76,7 +75,10 @@ static void startInterruptTimer(int quantum_usecs)
    	timer.it_value.tv_usec = quantum_usecs;
    	timer.it_interval.tv_sec = 0;
    	timer.it_interval.tv_usec = quantum_usecs;
-	setitimer(ITIMER_VIRTUAL, &timer, nullptr);
+	if (setitimer(ITIMER_VIRTUAL, &timer, nullptr) == -1) {
+		perror("setitimer");
+		exit(-1);
+	}
 }
 
 //disable and enable interrupt functions are from code example on Canvas
@@ -84,8 +86,11 @@ static void disableInterrupts()
 {	
 	printf("inside disable interrupt\n");
     assert(interrupts_enabled);
-    sigprocmask(SIG_BLOCK,&sa.sa_mask, NULL);
+    if (sigprocmask(SIG_BLOCK, &sa.sa_mask, NULL) != 0) {
+    	perror("Error blocking signals");
+	}
     interrupts_enabled = false;
+	
 }
 
 static void enableInterrupts()
@@ -93,7 +98,11 @@ static void enableInterrupts()
 	printf("inside able interrupt\n");
     assert(!interrupts_enabled);
     interrupts_enabled = true;
-    sigprocmask(SIG_UNBLOCK,&sa.sa_mask, NULL);
+    if (sigprocmask(SIG_UNBLOCK, &sa.sa_mask, NULL) != 0) {
+    	perror("Error unblocking signals");
+    }
+	printf("after enable interrupt\n");
+
 }
 
 // Queue Management ------------------------------------------------------------
@@ -191,26 +200,22 @@ int removeFromReadyQueue(int tid)
 }
 
 // Helper functions ------------------------------------------------------------
-int find_if_terminated(int tid){
-	for (deque<finished_queue_entry_t *>::iterator iter = finished_queue.begin(); iter != finished_queue.end(); ++iter)
-	{
-		if (tid == (*iter)->tcb->getId())
-		{
-			return 1;
-		}
-	}
-	return -1;
-}
 
 // Switch to the next ready thread
 static void switchThreads(int placeholder)
-{	disableInterrupts();
+{	if(interrupts_enabled){
+		disableInterrupts();
+	}
 	// TODO
 	printf("inside swithc context\n");
 	volatile int main_flag = 0, flag=0;
 	printf("in else of switch threads\n");
 	ucontext_t* r_context = running_thread->getContext();
 	int ret_val = getcontext(r_context);
+	if (ret_val == -1) {
+		perror("getcontext");
+		exit(-1);
+	}
 	if (flag == 1) {
 		printf("flag==1 in else of switch threads\n");
 		if(running_thread->getId()==0){
@@ -224,18 +229,15 @@ static void switchThreads(int placeholder)
 		running_thread->setState(READY);
 		addToReadyQueue(running_thread);
 	}
-	// if(running_thread->getState()==FINISHED&&running_thread->getId()!=0){//from yield
-	// 	cout<<"Delete id: "<<running_thread->getId()<<endl;
-	// 	delete threads[running_thread->getId()];
-	// 	threads[running_thread->getId()] = nullptr;
-	// }
 	
 	TCB* next_thread =popFromReadyQueue();
 	cout<<"Next thread in else"<<next_thread->getId()<<endl;
 	running_thread = next_thread;
 	running_thread->setState(RUNNING);
 	running_thread->increaseQuantum();
-	enableInterrupts();
+	if(!interrupts_enabled){
+			enableInterrupts();
+		}
 	setcontext(next_thread->getContext());// 
 	
 	
@@ -279,7 +281,10 @@ int uthread_init(int quantum_usecs)
         cout << "ERROR: Failed to add to set" << endl;
         exit(1);
     }
-	sigaction(SIGVTALRM, &sa, nullptr);
+	if (sigaction(SIGVTALRM, &sa, nullptr) == -1) {
+    	perror("sigaction");
+    	exit(-1);
+}
 
 	startInterruptTimer(quantum_usecs);
   	
@@ -295,7 +300,9 @@ int uthread_init(int quantum_usecs)
 
 int uthread_create(void *(*start_routine)(void *), void *arg)
 {	
-	disableInterrupts();
+	if(interrupts_enabled){
+		disableInterrupts();
+	}
 	// Create a new thread and add it to the ready queue
 	next_thread_index = find_next_index();
 	State state = READY;
@@ -307,7 +314,9 @@ int uthread_create(void *(*start_routine)(void *), void *arg)
 	addToReadyQueue(tcb);
 	printf("end of thread_create\n");
 	cout<<"the state of all thread"<<threads[next_thread_index]->getState()<<endl;
-	enableInterrupts();
+	if(!interrupts_enabled){
+		enableInterrupts();
+	}
     return next_thread_index;
 }
 
@@ -316,6 +325,9 @@ int uthread_join(int tid, void **retval)
 	// If the thread specified by tid is already terminated, just return
 	// If the thread specified by tid is still running, block until it terminates
 	// Set *retval to be the result of thread if retval != nullptr
+	if(interrupts_enabled){
+		disableInterrupts();
+	}
 	cout<<"running thread "<<running_thread->getId()<< "and waiting for "<<tid<<endl;
 	for(finished_queue_entry_t* entry:finished_queue){
 		cout<<entry->tcb->getId()<<endl;
@@ -329,12 +341,15 @@ int uthread_join(int tid, void **retval)
 				delete threads[tid];
 				threads[tid] = nullptr;
 			}
+			if(!interrupts_enabled){
+			enableInterrupts();
+		}
 			return 1;
 		}
 	}
-	printf("inside join\n");
-	cout<<"the id of the join thread "<<threads[tid]->getId()<<endl;
-	cout<<"the state of the join thread "<<threads[tid]->getState()<<endl;
+	// printf("inside join\n");
+	// cout<<"the id of the join thread "<<threads[tid]->getId()<<endl;
+	// cout<<"the state of the join thread "<<threads[tid]->getState()<<endl;
 	if(threads[tid]->getState()==RUNNING||threads[tid]->getState()==READY){
 		printf("in the if of join\n");
 		join_queue_entry_t* join_entry =new join_queue_entry_t;
@@ -342,10 +357,17 @@ int uthread_join(int tid, void **retval)
 		join_entry->waiting_for_tid = tid;
 		addToJoinQueue(join_entry);
 		running_thread->setState(BLOCK);
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
+		printf("before the while in join\n");
 		while(threads[tid]->getState()!=FINISHED){
 			continue;
 		}
 		printf("after the while loop in join\n");
+		if(interrupts_enabled){
+		disableInterrupts();
+		}
 		if(retval!=nullptr){
 			printf("inside the retval!=nullptr\n");
 			for(finished_queue_entry_t* entry:finished_queue){
@@ -359,6 +381,9 @@ int uthread_join(int tid, void **retval)
 		cout<<"Delete id: "<<tid<<endl;
 		delete threads[tid];
 		threads[tid] = nullptr;
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
 		return 1;
 
 		
@@ -369,8 +394,13 @@ int uthread_join(int tid, void **retval)
 int uthread_yield()
 {
 	// TODO
-	// setitimer(ITIMER_VIRTUAL, &timer, nullptr);
+	if(interrupts_enabled){
+		disableInterrupts();
+	}
 	switchThreads(1);
+	if(!interrupts_enabled){
+			enableInterrupts();
+	}
 	return 1;
 }
 
@@ -380,6 +410,9 @@ void uthread_exit(void *retval)
 	// Move any threads joined on this thread back to the ready queue
 	// Move this thread to the finished queue
 	//if other thread is waiting for me then alert
+	if(interrupts_enabled){
+		disableInterrupts();
+	}
 	cout<<"The result in exit is: "<<retval;
 	if(threads[0]->getState()==RUNNING){
 		printf("main thread exiting!!!\n");
@@ -397,7 +430,10 @@ void uthread_exit(void *retval)
 	finish_entry->result=retval;
 	addToFinishQueue(finish_entry);
 	running_thread->setState(FINISHED);
-	cout<<"How many times running??????????? "<<running_thread->getQuantum()<<endl;
+	cout<<"How many times running "<<running_thread->getQuantum()<<endl;
+	if(!interrupts_enabled){
+			enableInterrupts();
+	}
 	uthread_yield();
 	
 
@@ -407,30 +443,49 @@ int uthread_suspend(int tid)
 {
 	// Move the thread specified by tid from whatever state it is
 	// in to the block queue
+	printf("inside suspend\n");
+	if(interrupts_enabled){
+		disableInterrupts();
+	}
 	if(threads[tid]->getState()==RUNNING){
 		join_queue_entry_t * join_entry =new join_queue_entry_t;
 		join_entry->tcb = threads[tid];
 		addToJoinQueue(join_entry);
 		threads[tid]->setState(BLOCK);
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
 		uthread_yield();
 		return 1;
 
 	}
 	else if (threads[tid]->getState()==BLOCK){
 		printf("BLOCK already!\n");
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
 		return -1;
 	}
 	else if (threads[tid]->getState()==READY){
+		printf("inside suspend\n");
 		removeFromReadyQueue(tid);
+		printf("after remove\n");
 		join_queue_entry_t * join_entry =new join_queue_entry_t;
 		join_entry->tcb = threads[tid];
 		join_entry->waiting_for_tid = running_thread->getId();
 		threads[tid]->setState(BLOCK);
 		addToJoinQueue(join_entry);
+		printf("after join\n");
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
 		return 1;
 	}
 	else {
 		printf("Finished already!\n");
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
 		return -1;
 	}
 	
@@ -439,22 +494,39 @@ int uthread_suspend(int tid)
 int uthread_resume(int tid)
 {
 	// Move the thread specified by tid back to the ready queue
+	if(interrupts_enabled){
+		disableInterrupts();
+	}
 	if(threads[tid]->getState()==RUNNING){
 		printf("Running already!\n");
+		if(!interrupts_enabled){
+			if(!interrupts_enabled){
+			enableInterrupts();
+		}
+		}
 		return 1;
 	}
 	else if (threads[tid]->getState()==BLOCK){
 		removeFromJoinQueue(tid);
 		threads[tid]->setState(READY);
 		addToReadyQueue(threads[tid]);
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
 		return 1;
 	}
 	else if (threads[tid]->getState()==READY){
 		printf("ready already!\n");
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
 		return -1;
 	}
 	else {
 		printf("Finished already!\n");
+		if(!interrupts_enabled){
+			enableInterrupts();
+		}
 		return -1;
 	}
 	return -1;
@@ -521,6 +593,93 @@ void* y(void* x)
 		sleep(1); 
 	}
 }
+
+void* lazy_worker(void* x){
+	int y =0;
+	while(fire_time<3){
+		y++;
+		// cout<<" the value of y"<<endl;
+	}
+	unsigned long *return_buffer = new unsigned long;
+	*return_buffer=y;
+	return return_buffer;
+}
+
+void test_timer_switch(){
+	int thread_count = 5;
+	int a=0;
+	int *thread2 = new int[thread_count];
+	int ret = uthread_init(1);
+	for (int i = 0; i < thread_count; i++)
+    {
+        int tid = uthread_create(lazy_worker, &a);
+        thread2[i] = tid;
+        cout<<"all the id"<<tid<<endl;
+        cout<<"all the state"<<endl;
+    }
+    printf("after create all the thread\n");
+	unsigned long g_cnt = 0;
+	for (int i = 0; i < thread_count; i++)
+    {	
+		
+        /* Collect the result from the user via their allocated heap pointer */
+        unsigned long *local_cnt;
+        cout<<"Local_cnt:"<<local_cnt<<endl;
+        cout<<"each id"<<thread2[i]<<endl;
+        uthread_join(thread2[i], (void **)&local_cnt);
+        cout<<"Local_cnt:"<<local_cnt<<endl;
+        /* Deallocate pointer to get the actual count*/
+        g_cnt += *local_cnt;
+
+        /* Deallocate thread result on the heap */
+        delete local_cnt;
+    }
+    cout<<"final answer:"<<g_cnt<<endl;
+
+
+    delete[] thread2;
+}
+
+int main(){
+	test_timer_switch();
+}
+// void test_suspend() {
+// 	printf("+---Testing suspend function...\n");
+//     for (int i = 0; i < MAX_THREAD_NUM-2; i++)
+//     {
+// 		int tid = threads[i]->getId();
+// 		//cout<<tid;
+// 		State cur_state = threads[i]->getState();
+// 		//cout<<cur_state;
+// 		int res_suspend = uthread_suspend(tid);
+// 		if (res_suspend == 1) {
+// 			cout<<"The current thread "<<i<<" is in: "<<cur_state<<"\nSuspend successfully!\n"<<endl; 
+// 		} else {
+// 		cout<<"The current thread "<<i<<" is in: "<<cur_state<<"\nFailed to suspend!\n"<<endl; 
+// 		}
+//     }
+//     printf("+---Testing completed!\n");
+// }
+
+// void test_resume() {
+// 	printf("+---Testing resume function...\n");
+//     for (int i = 0; i < MAX_THREAD_NUM-1; i++)
+//     {
+// 		int tid = threads[i]->getId();
+//         int res_resume = uthread_resume(tid);
+//         State cur_state = threads[i]->getState();
+//         if (cur_state == RUNNING) {
+//             cout<<"The current thread "<<i<<" is in the running queue! Running already!\n"<<endl; 
+//         } else if (cur_state == READY) {
+//             cout<<"The current thread "<<i<<" is in the ready queue! Failed to resume!\n"<<endl; 
+//         } else if (cur_state == BLOCK) {
+// 			cout<<"The current thread "<<i<<" is in the block queue! Resume successfully!\n"<<endl; 
+// 		} else {
+// 			cout<<"The current thread "<<i<<" is in the finihsed queue! Failed to resume!\n"<<endl;
+// 		}
+//     }
+//     printf("+---Testing completed!\n");
+// }
 
 // int main() 
 // {	
