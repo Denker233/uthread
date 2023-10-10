@@ -36,14 +36,14 @@ typedef struct join_queue_entry
 //   Starter code for a ready queue is provided to you
 // - Separate join and finished "queues" can also help when supporting joining.
 //   Example join and finished queue entry types are provided above
-
+int fire_time=0;
 TCB* running_thread;
 TCB* threads[MAX_THREAD_NUM]={nullptr};
 int next_thread_index=0;
 ucontext_t* main_thread_context;
 struct sigaction sa;
 static bool interrupts_enabled = true;
-struct itimerval timer;
+
 
 
 int find_next_index(){
@@ -71,6 +71,7 @@ static void startInterruptTimer(int quantum_usecs)
 {	
 	printf("inside start interrupt\n");
 	// TODO
+	struct itimerval timer;
 	timer.it_value.tv_sec = 0;
    	timer.it_value.tv_usec = quantum_usecs;
    	timer.it_interval.tv_sec = 0;
@@ -233,6 +234,7 @@ static void switchThreads(int placeholder)
 	cout<<"Next thread in else"<<next_thread->getId()<<endl;
 	running_thread = next_thread;
 	running_thread->setState(RUNNING);
+	running_thread->increaseQuantum();
 	enableInterrupts();
 	setcontext(next_thread->getContext());// 
 	
@@ -253,20 +255,30 @@ void stub(void *(*start_routine)(void *), void *arg)
 	uthread_exit(result);
 }
 
+void timerhandler(int quantum_usecs){
+	fire_time++;
+	cout<<"alarm is fired !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"<<fire_time<<endl;
+	startInterruptTimer(quantum_usecs);
+	switchThreads(1);
+}
 
 int uthread_init(int quantum_usecs)
 {
 	// Initialize any data structures
 	// Setup timer interrupt and handler
 	// Create a thread for the caller (main) thread
-	sa.sa_handler = switchThreads;
+	sa.sa_handler = timerhandler;
 	sa.sa_flags=0;
 	if (sigemptyset(&sa.sa_mask) < -1)
     {
         cout << "ERROR: Failed to empty to set" << endl;
         exit(1);
     }
-
+	if (sigaddset(&sa.sa_mask, SIGVTALRM))
+    {
+        cout << "ERROR: Failed to add to set" << endl;
+        exit(1);
+    }
 	sigaction(SIGVTALRM, &sa, nullptr);
 
 	startInterruptTimer(quantum_usecs);
@@ -317,12 +329,6 @@ int uthread_join(int tid, void **retval)
 				delete threads[tid];
 				threads[tid] = nullptr;
 			}
-			// cout<<"Delete id: "<<tid<<endl;
-			// // delete threads[tid];
-			// // threads[tid] = nullptr;
-			// removeFromFinishedQueue(tid);
-			// delete threads[tid];
-			// threads[tid] = nullptr;
 			return 1;
 		}
 	}
@@ -391,6 +397,7 @@ void uthread_exit(void *retval)
 	finish_entry->result=retval;
 	addToFinishQueue(finish_entry);
 	running_thread->setState(FINISHED);
+	cout<<"How many times running??????????? "<<running_thread->getQuantum()<<endl;
 	uthread_yield();
 	
 
